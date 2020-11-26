@@ -1,12 +1,4 @@
 # Overview
-Supplementary materials for the article about DMVPN mcast spoke-to-spoke deployment on [foxnetlab.com](http://foxnetlab.com/index.php/articles)
-
-# Topology
-![topology.png](Topology.png)
-
-DMVPN Phase 2 deployment. The goal is to be able to stream multicast from Spoke2 and receive it on Spoke1 as efficiently as possible.
-
-# Overview
 OSPF is a link-state IGP that resolves loops by creating a forwarding tree based on Djikstra algorithm within a single area. The behavior between the areas, however, resembles distance-vector IGPs that just send a prefix along with a cost; that’s the reason why OSPF is sometimes referred to as hybrid IGP (LS and DV combined). The loop prevention mechanism is quite simple, though: all areas connect to area 0, backbone (A0), that is responsible for passing prefixes to other areas; there is no direct route exchange between non-backbone areas.
 There is a well-known [YAK](https://blog.ipspace.net/2017/01/ospf-forwarding-address-yet-another.html) in the wild called OSPF Virtual Link. Everyone knows it’s a bad design, everyone agrees it should not be used unless completely necessary; yet there is little if any information why exactly that is not a good idea except introducing extra complexity. We are engineers not afraid of challenges so let’s look for a better argument. 
 
@@ -54,11 +46,13 @@ VRF info: (vrf in name/id, vrf out name/id)
 
 Now R1 traffic takes a longer path compared to the initial choice. The reason for that is the absence of transit capability that forces R1 to send packets along the path VL takes: R1-R2-R3. Although it is not optimal, such a behavior might be expected; the connectivity is still there. However, there is no sign of a loop. Yet. Let’s add some spice:
 
+### R2
 ```shell
-R2
-R3
 R2(config)#int f1/0
 R2(config-if)#ip os cost 100
+```
+### R3
+```shell
 R3(config)#int f1/0      
 R3(config-if)#ip os cost 100
 ```
@@ -104,17 +98,18 @@ O        5.5.5.5 [110/103] via 192.168.12.2, 00:08:07, FastEthernet0/1
 However, it’s a natural choice according to the rules without transit capability:
 * 5.5.5.5/32 is reachable via VL in A0
 * traffic follows VL path
+
 And, of course, the latter is redirected back by R2 that has no clue about VL nor transit capability; in this case - just following LSA3.
 So far it seems that transit capability is the villain here, not a VL. The explanation is rather simple: such a problem existed in OSPFv1 and was resolved by transit capability introduced in OSPFv2. One might say that such a behavior resembles microloops and I would agree; however, microloops is a transient state while OSPFv1 VL might have introduced a permanent loop.
 
-# RFC
+# RFC 1247
 OSPFv2 RFC includes the following about differences from OSPFv1:
 > *"When summarizing information into a virtual link's transit area, version 2 of the OSPF specification prohibits the collapsing of multiple backbone IP networks/subnets into a single summary link."*
 
 
 The problem gallantly described in this statement was actually a permutation of the behavior in our topology. If OSPF backbone routes were summarized on ABRs, this summary would not be used by virtual-link router. The forwarding would be broken by different views on the topology:
-    1. Virtual-link router followed native backbone route via virtual-link, exactly the same path as virtual-link;
-    2. Everyone else in the area except ABRs followed summarized route.
+* Virtual-link router followed native backbone route via virtual-link, exactly the same path as virtual-link;
+* Everyone else in the area except ABRs followed summarized route.
 In our case, if R3 could summarize 5.5.5.0/24 for instance, R2 would choose another summarized 5.5.5.0/25 path via R4 causing a loop. Solution? Enforce consistent view on the topology by prohibiting area 0 route modification a.k.a. summarization. Note that there is no need to enforce the same for summary from other areas – those summaries would be consistent in area 0 and further anyway because only the first ABR is allowed to summarize the area prefixes. Moreover, while summarization is prohibited, there is no such restriction for filtering with transit capability. Filtering does not modify the prefix, so transit capability has just fewer LSA1-LSA3 pairs to choose from.
 
 # Summary

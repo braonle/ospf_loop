@@ -1,4 +1,4 @@
-# Overview
+# Introduction
 OSPF is a link-state IGP that resolves loops by creating a forwarding tree based on Djikstra algorithm within a single area. The behavior between the areas, however, resembles distance-vector IGPs that just send a prefix along with a cost; that’s the reason why OSPF is sometimes referred to as hybrid IGP (LS and DV combined). The loop prevention mechanism is quite simple, though: all areas connect to area 0, backbone (A0), that is responsible for passing prefixes to other areas; there is no direct route exchange between non-backbone areas.
 There is a well-known [YAK](https://blog.ipspace.net/2017/01/ospf-forwarding-address-yet-another.html) in the wild called OSPF Virtual Link. Everyone knows it’s a bad design, everyone agrees it should not be used unless completely necessary; yet there is little if any information why exactly that is not a good idea except introducing extra complexity. We are engineers not afraid of challenges so let’s look for a better argument. 
 
